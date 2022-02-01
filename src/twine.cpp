@@ -26,12 +26,18 @@
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
     #pragma GCC diagnostic ignored "-Wunused-parameter"
-    #include <cobalt/stdio.h>
+    // #include <cobalt/stdio.h>
+    #include <linux/types.h>
+    #define _EVL_ATOMIC_H
+    typedef struct { __s32 val; } atomic_t;
+    #include <evl/evl.h>
+    #define rt_vfprintf evl_printf
     #pragma GCC diagnostic pop
 #else
     #include <cstdio>
     #include <cstdarg>
-    #define rt_vfprintf vfprintf
+    #define rt_vfprintf printf
+    #define evl_read_clock {}
 #endif
 
 #include "twine/twine.h"
@@ -74,7 +80,7 @@ int rt_printf(const char *format, ...)
     int n;
 
     va_start(args, format);
-    n = rt_vfprintf(stdout, format, args);
+    n = rt_vfprintf(format, args);
     va_end(args);
 
     return n;
@@ -101,7 +107,7 @@ std::chrono::nanoseconds current_rt_time()
     if (running_xenomai_realtime.is_set())
     {
         timespec tp;
-        __cobalt_clock_gettime(CLOCK_MONOTONIC, &tp);
+        evl_read_clock(CLOCK_MONOTONIC, &tp);
         return std::chrono::nanoseconds(tp.tv_nsec + tp.tv_sec * NS_TO_S);
     }
     else
@@ -121,8 +127,7 @@ std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_va
 #ifdef TWINE_BUILD_WITH_XENOMAI
     if (running_xenomai_realtime.is_set())
     {
-        int id = get_next_id();
-        return std::make_unique<XenomaiConditionVariable>(id);
+        return std::make_unique<XenomaiConditionVariable>();
     }
 #endif
 

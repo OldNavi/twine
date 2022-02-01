@@ -27,8 +27,10 @@
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #include <poll.h>
 #include <sys/eventfd.h>
-#include <rtdm/ipc.h>
-#include <cobalt/sys/socket.h>
+#include <evl/mutex.h>
+#include <evl/event.h>
+// #include <rtdm/ipc.h>
+// #include <cobalt/sys/socket.h>
 #endif
 
 namespace twine {
@@ -69,11 +71,7 @@ bool PosixConditionVariable::wait()
 }
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
-using MsgType = uint8_t;
-using NonRTMsgType = uint64_t;
 
-constexpr size_t NUM_ELEMENTS = 64;
-constexpr int INFINITE_POLL_TIME = -1;
 
 /**
  * @brief Implementation using xenomai xddp queues that allow signalling a
@@ -82,148 +80,49 @@ constexpr int INFINITE_POLL_TIME = -1;
 class XenomaiConditionVariable : public RtConditionVariable
 {
 public:
-    XenomaiConditionVariable(int id);
+    XenomaiConditionVariable() = default;
 
-    virtual ~XenomaiConditionVariable() override;
+    ~XenomaiConditionVariable() override = default;
 
     void notify() override;
 
     bool wait() override;
 
 private:
-    void _set_up_socket();
-    void _set_up_files();
+    struct evl_mutex lock = EVL_MUTEX_INITIALIZER("this_lock",
+       		 EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL|EVL_CLONE_PRIVATE);
+    struct evl_event event = EVL_EVENT_INITIALIZER("this_event",
+       		 EVL_CLOCK_MONOTONIC, EVL_CLONE_PRIVATE);
+    bool condition = false;
 
-    std::string  _socket_name;
-    sockaddr_ipc _socket_address;
-    int          _socket_handle{0};
-
-    int          _rt_file{0};
-    int          _non_rt_file{0};
-    int          _id{0};
-
-    std::array<pollfd, 2> _poll_targets;
 };
 
-/* The maximum number of condition variable instances depend on the
- * number of rtp file descriptors enabled in the the xenomai kernel.
- * It is set with CONFIG_XENO_OPT_PIPE_NRDEV, pass the same value
- * to twine when building for xenomai */
-
-constexpr size_t MAX_XENOMAI_DEVICES = TWINE_MAX_XENOMAI_RTP_DEVICES;
-
-// Note, static variables are guaranteed to be zero initialized
-static std::array<bool, MAX_XENOMAI_DEVICES> active_ids;
-static std::mutex mutex;
-
-int get_next_id()
-{
-    for (auto i = 0u; i < active_ids.size(); ++i)
-    {
-        if (active_ids[i] == false)
-        {
-            active_ids[i] = true;
-            return i;
-        }
-    }
-    throw std::runtime_error("Maximum number of RtConditionVariables reached");
-}
-
-void deregister_id(int id)
-{
-    assert(id < static_cast<int>(MAX_XENOMAI_DEVICES));
-    std::unique_lock<std::mutex> lock(mutex);
-    active_ids[id] = false;
-}
-
-XenomaiConditionVariable::XenomaiConditionVariable(int id) : _id(id)
-{
-    _set_up_socket();
-    _set_up_files();
-}
-
-XenomaiConditionVariable::~XenomaiConditionVariable()
-{
-    close(_rt_file);
-    close(_non_rt_file);
-    __cobalt_close(_socket_handle);
-    deregister_id(_id);
-}
 
 void XenomaiConditionVariable::notify()
 {
-    if (ThreadRtFlag::is_realtime())
-    {
-        MsgType data = 1;
-        __cobalt_sendto(_socket_handle, &data, sizeof(data), MSG_MORE, nullptr, 0);
-    }
-    else
-    {
-        // Linux EventFDs requires 8 bytes of data
-        NonRTMsgType data = 1;
-        [[maybe_unused]] auto unused = write(_non_rt_file, &data, sizeof(data));
-    }
+
+	evl_lock_mutex(&lock);
+	condition = true;
+	evl_signal_event(&event);
+	evl_unlock_mutex(&lock);
+
 }
 
 bool XenomaiConditionVariable::wait()
 {
-    MsgType buffer[NUM_ELEMENTS];
-    poll(_poll_targets.data(), _poll_targets.size(), INFINITE_POLL_TIME);
+	evl_lock_mutex(&lock);
+	/*
+	 * Check whether the wait condition is satisfied, go
+	 * sleeping if not. EVL drops the lock and puts the thread
+	 * to sleep atomically, then re-acquires it automatically
+	 * once the event is signaled before returning to the
+	 * caller.
+	 */
+	while (!condition)
+	      evl_wait_event(&event, &lock);
 
-    int len = 0;
-
-    // drain file descriptors.
-    for (auto& t : _poll_targets)
-    {
-        if (t.revents != 0)
-        {
-            len += read(t.fd, &buffer, sizeof(buffer));
-            t.revents = 0;
-        }
-    }
-
-    return len > 1;
-}
-
-void XenomaiConditionVariable::_set_up_socket()
-{
-    _socket_handle = __cobalt_socket(AF_RTIPC, SOCK_DGRAM, IPCPROTO_XDDP);
-    if (_socket_handle < 0)
-    {
-        throw std::runtime_error("xddp support not enabled in kernel");
-    }
-
-    size_t pool_size = NUM_ELEMENTS * sizeof(MsgType);
-    __cobalt_setsockopt(_socket_handle, SOL_XDDP, XDDP_BUFSZ, &pool_size, sizeof(pool_size));
-
-    memset(&_socket_address, 0, sizeof(_socket_address));
-    _socket_address.sipc_family = AF_RTIPC;
-    _socket_address.sipc_port = _id;
-
-    auto res = __cobalt_bind(_socket_handle, (struct sockaddr*) &_socket_address, sizeof(_socket_address));
-    if (res < 0)
-    {
-        throw std::runtime_error(strerror(errno));
-    }
-}
-
-void XenomaiConditionVariable::_set_up_files()
-{
-    _socket_name = "/dev/rtp" + std::to_string(_id);
-    _non_rt_file = eventfd(0, EFD_SEMAPHORE);
-    if (_non_rt_file <= 0)
-    {
-        throw std::runtime_error(strerror(errno));
-    }
-
-    _rt_file = open(_socket_name.c_str(), O_RDWR | O_NONBLOCK);
-    if (_rt_file <= 0)
-    {
-        throw std::runtime_error(strerror(errno));
-    }
-
-    _poll_targets[0] = {.fd = _rt_file, .events = POLLIN, .revents = 0};
-    _poll_targets[1] = {.fd = _non_rt_file, .events = POLLIN, .revents = 0};
+	evl_unlock_mutex(&lock);
+    return condition;
 }
 
 #endif

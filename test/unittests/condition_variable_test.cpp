@@ -7,8 +7,7 @@
 using namespace twine;
 
 namespace twine {
-int  get_next_id();
-void deregister_id(int id);
+
 }
 
 bool flag = false;
@@ -49,19 +48,5 @@ TEST_F(RtConditionVariableTest, FunctionalityTest)
 }
 
 #ifdef TWINE_BUILD_XENOMAI_TESTS
-TEST(IdGenerationTest, TestOrder)
-{
-    ASSERT_EQ(0, get_next_id());
-    ASSERT_EQ(1, get_next_id());
-    ASSERT_EQ(2, get_next_id());
-    deregister_id(1);
-    ASSERT_EQ(1, get_next_id());
-    ASSERT_EQ(3, get_next_id());
 
-    EXPECT_THROW( for(int i = 0; i < 100; ++i)
-                  {
-                      get_next_id();
-                  },
-                  std::runtime_error);
-}
 #endif

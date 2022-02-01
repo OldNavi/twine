@@ -26,13 +26,76 @@
 #include <array>
 #include <cstring>
 #include <cerrno>
-
+#ifdef TWINE_BUILD_WITH_XENOMAI
+#include <string>
+#include <sstream>
+#include <iostream>
+#include <fstream>
+#endif
 #include "thread_helpers.h"
 #include "twine_internal.h"
 
 namespace twine {
 
 void set_flush_denormals_to_zero();
+
+#ifdef TWINE_BUILD_WITH_XENOMAI
+int ConvertString2Int(const std::string& str)
+{
+    std::stringstream ss(str);
+    int x;
+    if (! (ss >> x))
+    {
+        std::cerr << "Error converting " << str << " to integer" << std::endl;
+        abort();
+    }
+    return x;
+}
+
+std::vector<std::string> SplitStringToArray(const std::string& str, char splitter)
+{
+    std::vector<std::string> tokens;
+    std::stringstream ss(str);
+    std::string temp;
+    while (getline(ss, temp, splitter)) // split into new "lines" based on character
+    {
+        tokens.push_back(temp);
+    }
+    return tokens;
+}
+
+std::vector<int> ParseData(const std::string& data)
+{
+    std::vector<std::string> tokens = SplitStringToArray(data, ',');
+
+    std::vector<int> result;
+    for (std::vector<std::string>::const_iterator it = tokens.begin(), end_it = tokens.end(); it != end_it; ++it)
+    {
+        const std::string& token = *it;
+        std::vector<std::string> range = SplitStringToArray(token, '-');
+        if (range.size() == 1)
+        {
+            result.push_back(ConvertString2Int(range[0]));
+        }
+        else if (range.size() == 2)
+        {
+            int start = ConvertString2Int(range[0]);
+            int stop = ConvertString2Int(range[1]);
+            for (int i = start; i <= stop; i++)
+            {
+                result.push_back(i);
+            }
+        }
+        else
+        {
+            std::cerr << "Error parsing token " << token << std::endl;
+            abort();
+        }
+    }
+
+    return result;
+}
+#endif
 
 inline WorkerPoolStatus errno_to_worker_status(int error)
 {
@@ -236,6 +299,9 @@ public:
 
     static void* _worker_function(void* data)
     {
+        #ifdef TWINE_BUILD_WITH_XENOMAI
+        evl_attach_self("/worker_thread:%d",pthread_self());
+        #endif
         reinterpret_cast<WorkerThread<type>*>(data)->_internal_worker_function();
         return nullptr;
     }
@@ -277,7 +343,26 @@ public:
 
     explicit WorkerPoolImpl(int cores, bool disable_denormals) : _no_cores(cores),
                                                                  _disable_denormals(disable_denormals)
-    {}
+    {
+    #ifdef TWINE_BUILD_WITH_XENOMAI
+    std::ifstream input("/sys/devices/system/cpu/isolated");
+    std::string line;
+    std::getline( input, line );
+	core_numbers = ParseData(line);
+    if(core_numbers.size()<0)
+    {
+        std::cerr << "Need to have isolated cpus setup in kernel" << std::endl;
+        abort();
+    }
+    // std::cerr << "Pool cores: ";
+
+    for (std::vector<int>::const_iterator it = core_numbers.begin(), end_it = core_numbers.end(); it != end_it; ++it)
+    {
+        std::cerr << *it << " ";
+    }
+    std::cerr << std::endl;
+#endif
+    }
 
     ~WorkerPoolImpl()
     {
@@ -291,7 +376,12 @@ public:
         auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running, _disable_denormals);
         _barrier.set_no_threads(_no_workers + 1);
         // round-robin assignment to cpu cores
+#ifdef TWINE_BUILD_WITH_XENOMAI  
+        int core = core_numbers[(_no_workers + 1) % ((unsigned)_no_cores < core_numbers.size() ? _no_cores : core_numbers.size())];
+        //std::cerr << "Core assigned = " << core << std::endl;
+#else
         int core = (_no_workers + 1) % _no_cores;
+#endif
         auto res = errno_to_worker_status(worker->run(core));
         if (res == WorkerPoolStatus::OK)
         {
@@ -324,8 +414,14 @@ private:
     bool                        _disable_denormals;
     BarrierWithTrigger<type>    _barrier;
     std::vector<std::unique_ptr<WorkerThread<type>>> _workers;
+#ifdef TWINE_BUILD_WITH_XENOMAI
+    std::vector<int> core_numbers;
+#endif
 };
 
+
 }// namespace twine
+
+
 
 #endif //TWINE_WORKER_POOL_IMPLEMENTATION_H

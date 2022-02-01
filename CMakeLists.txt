@@ -14,7 +14,7 @@ project(twine VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERS
 # These can be overriden by ccmake, commandline args or using
 # set(BUILD_OPTION <new value> CACHE <type> "") in an including project
 
-option(TWINE_WITH_XENOMAI "Build with xenomai realtime thread support" OFF)
+option(TWINE_WITH_XENOMAI "Build with xenomai realtime thread support" ON)
 option(TWINE_WITH_TESTS "Build and run unit tests" ON)
 
 SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
@@ -23,14 +23,14 @@ SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultane
 #  Cross compilation  #
 #######################
 
-set(XENOMAI_BASE_DIR "/usr/xenomai" CACHE STRING "xenomai base dir path")
+set(XENOMAI_BASE_DIR "/opt/evl" CACHE STRING "xenomai base dir path")
 
 if(NOT "$ENV{CMAKE_SYSROOT}" STREQUAL "")
     set(CMAKE_SYSROOT "$ENV{CMAKE_SYSROOT}")
 endif()
 
 if(NOT "${CMAKE_SYSROOT}" STREQUAL "")
-    set(XENOMAI_BASE_DIR "${CMAKE_SYSROOT}/usr/xenomai")
+    set(XENOMAI_BASE_DIR "${CMAKE_SYSROOT}/opt/evl")
     message("XENOMAI_BASE_DIR is " ${XENOMAI_BASE_DIR})
 endif()
 
@@ -64,14 +64,13 @@ function(add_xenomai_to_target target)
     target_compile_definitions(${target} PRIVATE -DTWINE_BUILD_WITH_XENOMAI)
 
     # from `xeno-config --skin=posix --cflags`
-    set(XENOMAI_C_FLAGS "-D_GNU_SOURCE -D_REENTRANT -D__COBALT__ -D__COBALT_WRAP__")
+    set(XENOMAI_C_FLAGS "-D_GNU_SOURCE -D_REENTRANT ")
 
     set(XENOMAI_INCLUDE_DIRS
         ${XENOMAI_BASE_DIR}/include
-        ${XENOMAI_BASE_DIR}/include/cobalt
     )
 
-    find_library(COBALT_LIB cobalt HINTS ${XENOMAI_BASE_DIR}/lib)
+    find_library(COBALT_LIB evl HINTS ${XENOMAI_BASE_DIR}/lib)
     target_compile_options(${target} PRIVATE ${XENOMAI_C_FLAGS})
     target_include_directories(${target} PRIVATE ${XENOMAI_INCLUDE_DIRS})
     target_link_libraries(${target} PRIVATE ${COBALT_LIB} rt m)
