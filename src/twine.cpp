@@ -90,6 +90,7 @@ void init_xenomai()
 {
 #ifdef TWINE_BUILD_WITH_XENOMAI
     running_xenomai_realtime.set(true);
+    evl_init();
 #endif
 }
 
@@ -127,7 +128,8 @@ std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_va
 #ifdef TWINE_BUILD_WITH_XENOMAI
     if (running_xenomai_realtime.is_set())
     {
-        return std::make_unique<XenomaiConditionVariable>();
+        int id = get_next_id();
+        return std::make_unique<XenomaiConditionVariable>(id);
     }
 #endif
 

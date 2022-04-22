@@ -23,14 +23,14 @@ SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultane
 #  Cross compilation  #
 #######################
 
-set(XENOMAI_BASE_DIR "/opt/evl" CACHE STRING "xenomai base dir path")
+set(XENOMAI_BASE_DIR "/usr/local" CACHE STRING "xenomai base dir path")
 
 if(NOT "$ENV{CMAKE_SYSROOT}" STREQUAL "")
     set(CMAKE_SYSROOT "$ENV{CMAKE_SYSROOT}")
 endif()
 
 if(NOT "${CMAKE_SYSROOT}" STREQUAL "")
-    set(XENOMAI_BASE_DIR "${CMAKE_SYSROOT}/opt/evl")
+    set(XENOMAI_BASE_DIR "${CMAKE_SYSROOT}/usr/local")
     message("XENOMAI_BASE_DIR is " ${XENOMAI_BASE_DIR})
 endif()
 

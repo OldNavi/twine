@@ -23,7 +23,8 @@
 #include <cassert>
 
 #include <pthread.h>
-
+#include <semaphore.h>
+#include <fcntl.h>
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 // #include <cobalt/pthread.h>
@@ -167,14 +168,14 @@ inline int condition_broadcast(pthread_cond_t* condition_var)
 template<ThreadType type>
 inline int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument)
 {
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_create(thread, attributes, entry_fun, argument);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
+    // if constexpr (type == ThreadType::PTHREAD)
+    // {
+    //     return pthread_create(thread, attributes, entry_fun, argument);
+    // }
+    // else if constexpr (type == ThreadType::XENOMAI)
+    // {
         return  pthread_create(thread, attributes, entry_fun, argument);
-    }
+    // }
 }
 
 template<ThreadType type>
@@ -190,6 +191,65 @@ inline int thread_join(pthread_t thread, void** return_var = nullptr)
     // }
 }
 
+template<ThreadType type>
+inline int semaphore_create(sem_t** semaphore, [[maybe_unused]] const char* semaphore_name)
+{
+    // if constexpr (type == ThreadType::PTHREAD)
+    // {
+        sem_unlink(semaphore_name);
+        *semaphore = sem_open(semaphore_name, O_CREAT, 0, 0);
+        if (*semaphore == SEM_FAILED)
+        {
+            return errno;
+        }
+        return 0;
+    // }
+    // else if constexpr (type == ThreadType::XENOMAI)
+    // {
+    //     return __cobalt_sem_init(*semaphore, 0, 0);
+    // }
+}
+
+template<ThreadType type>
+inline int semaphore_destroy(sem_t* semaphore, [[maybe_unused]] const char* semaphore_name)
+{
+    // if constexpr (type == ThreadType::PTHREAD)
+    // {
+        sem_unlink(semaphore_name);
+        sem_close(semaphore);
+        return 0;
+    // }
+    // else if constexpr (type == ThreadType::XENOMAI)
+    // {
+    //     return __cobalt_sem_destroy(semaphore);
+    // }
+}
+
+template<ThreadType type>
+inline int semaphore_wait(sem_t* semaphore)
+{
+    // if constexpr (type == ThreadType::PTHREAD)
+    // {
+        return sem_wait(semaphore);
+    // }
+    // else if constexpr (type == ThreadType::XENOMAI)
+    // {
+    //     return __cobalt_sem_wait(semaphore);
+    // }
+}
+
+template<ThreadType type>
+inline int semaphore_signal(sem_t* semaphore)
+{
+    // if constexpr (type == ThreadType::PTHREAD)
+    // {
+        return sem_post(semaphore);
+    // }
+    // else if constexpr (type == ThreadType::XENOMAI)
+    // {
+    //     return __cobalt_sem_post(semaphore);
+    // }
+}
 } // namespace twine
 
 #endif //TWINE_THREAD_HELPERS_H

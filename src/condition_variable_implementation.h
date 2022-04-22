@@ -80,23 +80,51 @@ bool PosixConditionVariable::wait()
 class XenomaiConditionVariable : public RtConditionVariable
 {
 public:
-    XenomaiConditionVariable() = default;
+    XenomaiConditionVariable(int id);
 
-    ~XenomaiConditionVariable() override = default;
+    ~XenomaiConditionVariable() override;
+
 
     void notify() override;
 
     bool wait() override;
 
-private:
-    struct evl_mutex lock = EVL_MUTEX_INITIALIZER("this_lock",
-       		 EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL|EVL_CLONE_PRIVATE);
-    struct evl_event event = EVL_EVENT_INITIALIZER("this_event",
-       		 EVL_CLOCK_MONOTONIC, EVL_CLONE_PRIVATE);
-    bool condition = false;
 
+private:
+    struct evl_mutex lock; 
+    struct evl_event event;
+
+    bool condition = false;
+    int          _id{0};
+    int _mutex_fd{0};
+    int _event_fd{0};
 };
 
+// Note, static variables are guaranteed to be zero initialized
+constexpr size_t MAX_XENOMAI_DEVICES = TWINE_MAX_XENOMAI_RTP_DEVICES;
+
+static std::array<bool, MAX_XENOMAI_DEVICES> active_ids;
+static std::mutex mutex;
+
+int get_next_id()
+{
+    for (auto i = 0u; i < active_ids.size(); ++i)
+    {
+        if (active_ids[i] == false)
+        {
+            active_ids[i] = true;
+            return i;
+        }
+    }
+    throw std::runtime_error("Maximum number of RtConditionVariables reached");
+}
+
+void deregister_id(int id)
+{
+    assert(id < static_cast<int>(MAX_XENOMAI_DEVICES));
+    std::unique_lock<std::mutex> lock(mutex);
+    active_ids[id] = false;
+}
 
 void XenomaiConditionVariable::notify()
 {
@@ -123,6 +151,19 @@ bool XenomaiConditionVariable::wait()
 
 	evl_unlock_mutex(&lock);
     return condition;
+}
+
+XenomaiConditionVariable::XenomaiConditionVariable(int id) : _id(id)
+{
+    _mutex_fd = evl_create_mutex(&lock, EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL, "rt_condition_var_mutex:%d",_id); 
+    _event_fd = evl_new_event(&event, "rt_condition_var_event:%d",_id);
+}
+
+XenomaiConditionVariable::~XenomaiConditionVariable()
+{
+    evl_close_event(&event);
+    evl_close_mutex(&lock);
+    deregister_id(_id);
 }
 
 #endif

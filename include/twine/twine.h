@@ -17,8 +17,11 @@
 
 #include <memory>
 #include <chrono>
+#include <optional>
 
 namespace twine {
+
+constexpr int DEFAULT_SCHED_PRIORITY = 75;
 
 struct VersionInfo
 {
@@ -61,7 +64,8 @@ enum class WorkerPoolStatus
     OK,
     ERROR,
     PERMISSION_DENIED,
-    LIMIT_EXCEEDED
+    LIMIT_EXCEEDED,
+    INVALID_ARGUMENTS
 };
 
 /**
@@ -77,14 +81,20 @@ class WorkerPool
 {
 public:
     /**
-     * @brief Construct a WorkerPool object.
+     * @brief Construct a WorkerPool object. Throws a `std::runtime_error`
+     * if construction fails.
      * @param cores The maximum number of cores to use, must not be higher
      *              than the number of cores on the machine.
      * @param disable_denormals If set, all worker thread sets the FTZ (flush denormals to zero)
      *                          and DAC (denormals are zero) flags.
+     * @param break_on_mode_sw If set, enables the break_on_mode_swich flag for every worker
+     *                         thread, enabling debugging of memory allocations and syscalls from
+     *                         an audio thread. Only enabled for xenomai threads. Argument has no
+     *                         effect for posix threads.
      * @return
      */
-    static std::unique_ptr<WorkerPool> create_worker_pool(int cores, bool disable_denormals = true);
+    static std::unique_ptr<WorkerPool> create_worker_pool(int cores,
+                                                          bool disable_denormals = true);
 
     virtual ~WorkerPool() = default;
 
@@ -92,9 +102,15 @@ public:
      * @brief Add a worker to the pool
      * @param worker_cb The worker callback function that will called by he worker
      * @param worker_data A data pointer that will be passed to the worker callback
+     * @param sched_priority Worker priority in [0, 100] (higher numbers mean higher priorities)
+     * @param cpu_id Optional CPU core affinity preference. If left unspecified,
+     *               the first core with least usage is picked
+     *
      * @return WorkerPoolStatus::OK if the operation succeed, error status otherwise
      */
-    virtual WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data) = 0;
+    virtual WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data,
+                                        int sched_priority=DEFAULT_SCHED_PRIORITY,
+                                        std::optional<int> cpu_id=std::nullopt) = 0;
 
     /**
      * @brief Wait for all workers to finish and become idle. Will block until all
@@ -103,15 +119,22 @@ public:
     virtual void wait_for_workers_idle() = 0;
 
     /**
-     * @brief After calling, all workers will be signaled to run and will call their
-     *        respective callback functions in an unspecified order. The call will block
-     *        until all workers have finished and returned to idle.
+     * @brief Signal all workers to run call their respective callback functions in
+     *        an unspecified order. The call will not block until all workers have finished.
      */
     virtual void wakeup_workers() = 0;
+
+    /**
+     * @brief Signal all workers to run call their respective callback functions in
+     *        an unspecified order and block until all workers have finished in a
+     *        single atomic operation.
+     */
+    virtual void wakeup_and_wait() = 0;
 
 protected:
     WorkerPool() = default;
 };
+
 
 /**
  * @brief Condition variable designed to signal a lower priority non-realtime thread
