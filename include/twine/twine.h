@@ -124,12 +124,7 @@ public:
      */
     virtual void wakeup_workers() = 0;
 
-    /**
-     * @brief Signal all workers to run call their respective callback functions in
-     *        an unspecified order and block until all workers have finished in a
-     *        single atomic operation.
-     */
-    virtual void wakeup_and_wait() = 0;
+
 
 protected:
     WorkerPool() = default;
