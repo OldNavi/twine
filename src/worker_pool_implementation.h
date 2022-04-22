@@ -658,7 +658,12 @@ public:
     {
         if (_thread_handle != 0)
         {
-            thread_join<type>(_thread_handle, nullptr);
+#ifdef TWINE_BUILD_WITH_XENOMAI  
+        evl_detach_self();
+#endif
+            pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,nullptr);
+            pthread_cancel(_thread_handle);
+            // thread_join<type>(_thread_handle, nullptr);
         }
     }
 
