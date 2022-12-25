@@ -94,7 +94,8 @@ public:
      * @return
      */
     static std::unique_ptr<WorkerPool> create_worker_pool(int cores,
-                                                          bool disable_denormals = true);
+                                                          bool disable_denormals = true,
+                                                          bool break_on_mode_sw = false);
 
     virtual ~WorkerPool() = default;
 
@@ -124,12 +125,16 @@ public:
      */
     virtual void wakeup_workers() = 0;
 
-
+    /**
+     * @brief Signal all workers to run call their respective callback functions in
+     *        an unspecified order and block until all workers have finished in a
+     *        single atomic operation.
+     */
+    virtual void wakeup_and_wait() = 0;
 
 protected:
     WorkerPool() = default;
 };
-
 
 /**
  * @brief Condition variable designed to signal a lower priority non-realtime thread

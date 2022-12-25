@@ -36,13 +36,18 @@
 #include <evl/mutex.h>
 #include <evl/event.h>
 #endif
+#include <stdexcept>
+
 #include "thread_helpers.h"
 #include "twine_internal.h"
 
 namespace twine {
 
 void set_flush_denormals_to_zero();
-
+inline void enable_break_on_mode_sw()
+{
+    pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+}
 #ifdef TWINE_BUILD_WITH_XENOMAI
 int ConvertString2Int(const std::string& str)
 {
@@ -110,10 +115,12 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
 
         case EAGAIN:
             return WorkerPoolStatus::LIMIT_EXCEEDED;
-        case EINVAL:
-            return WorkerPoolStatus::INVALID_ARGUMENTS;
+
         case EPERM:
             return WorkerPoolStatus::PERMISSION_DENIED;
+
+        case EINVAL:
+            return WorkerPoolStatus::INVALID_ARGUMENTS;
 
         default:
             return WorkerPoolStatus::ERROR;
@@ -148,7 +155,7 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
 //                 std::cerr << "Cannot create semafore with error " << fd <<  std::endl;
 //             }
 //             _evl_active_sem = _evl_semaphores[0];
-//         } else 
+//         } else
 //         {
 //         mutex_create<type>(&_calling_mutex, nullptr);
 //         condition_var_create<type>(&_calling_cond, nullptr);
@@ -378,7 +385,7 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
 //         else
 //         {
 //             _evl_active_sem = _evl_semaphores[0];
-//         }  
+//         }
 //         }
 //         else
 //         {
@@ -390,7 +397,7 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
 //         {
 //             _active_sem = _semaphores[0];
 //         }
-//         } 
+//         }
 //     }
 
 //     std::array<sem_t, 2 > _semaphore_store;
@@ -486,8 +493,8 @@ public:
             evl_wait_event(&_evl_thread_cond, &_evl_thread_mutex);
         }
         evl_unlock_mutex(&_evl_thread_mutex);
-        } 
-        else 
+        }
+        else
         {
         mutex_lock<type>(&_calling_mutex);
         if (++_no_threads_currently_on_barrier >= _no_threads)
@@ -646,11 +653,13 @@ public:
 
     WorkerThread(BarrierWithTrigger<type>& barrier, WorkerCallback callback,
                                          void*callback_data, std::atomic_bool& running_flag,
-                                         bool disable_denormals): _barrier(barrier),
+                                         bool disable_denormals,
+                                         bool break_on_mode_sw): _barrier(barrier),
                                                                   _callback(callback),
                                                                   _callback_data(callback_data),
                                                                   _running(running_flag),
-                                                                  _disable_denormals(disable_denormals)
+                                                                  _disable_denormals(disable_denormals),
+                                                                  _break_on_mode_sw(break_on_mode_sw)
 
     {}
 
@@ -658,7 +667,7 @@ public:
     {
         if (_thread_handle != 0)
         {
-#ifdef TWINE_BUILD_WITH_XENOMAI  
+#ifdef TWINE_BUILD_WITH_XENOMAI
         evl_detach_self();
 #endif
             pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,nullptr);
@@ -691,7 +700,7 @@ public:
 #endif
         if (res == 0)
         {
-            return thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
+            res = thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
         }
         pthread_attr_destroy(&task_attributes);
         return res;
@@ -709,11 +718,15 @@ public:
 private:
     void _internal_worker_function()
     {
-        // this is a realtime thread
+        // Signal that this is a realtime thread
         ThreadRtFlag rt_flag;
         if (_disable_denormals)
         {
             set_flush_denormals_to_zero();
+        }
+        if (type == ThreadType::XENOMAI && _break_on_mode_sw)
+        {
+            enable_break_on_mode_sw();
         }
 
         while (true)
@@ -748,7 +761,7 @@ public:
                             bool disable_denormals) : _no_cores(cores),
                                                      _cores_usage(cores, 0),
                                                      _disable_denormals(disable_denormals)
-                                                     
+
     {
     #ifdef TWINE_BUILD_WITH_XENOMAI
     std::ifstream input("/sys/devices/system/cpu/isolated");
@@ -811,13 +824,13 @@ public:
         }
         // round-robin assignment to cpu cores
         _cores_usage[core]++;
-#ifdef TWINE_BUILD_WITH_XENOMAI  
+#ifdef TWINE_BUILD_WITH_XENOMAI
         core = core_numbers[core];
         //std::cerr << "Core assigned = " << core << std::endl;
 #endif
 
         auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running,
-                                                           _disable_denormals); 
+                                                           _disable_denormals);
         _barrier.set_no_threads(_no_workers + 1);
         auto res = errno_to_worker_status(worker->run(sched_priority, core));
         if (res == WorkerPoolStatus::OK)
@@ -843,7 +856,7 @@ public:
     {
         _barrier.release_all();
     }
-    
+
 
 
 private:
@@ -852,6 +865,7 @@ private:
     int                         _no_cores;
     std::vector<int>            _cores_usage;
     bool                        _disable_denormals;
+    bool                        _break_on_mode_sw;
     BarrierWithTrigger<type>    _barrier;
     std::vector<std::unique_ptr<WorkerThread<type>>> _workers;
 #ifdef TWINE_BUILD_WITH_XENOMAI

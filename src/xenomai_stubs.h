@@ -81,8 +81,6 @@ inline int __cobalt_pthread_join([[maybe_unused]]pthread_t thread, [[maybe_unuse
     return 0;
 }
 
-}
-
 inline int __cobalt_clock_gettime([[maybe_unused]] clockid_t clock_id, struct timespec *tp)
 {
     assert(false);
@@ -91,4 +89,35 @@ inline int __cobalt_clock_gettime([[maybe_unused]] clockid_t clock_id, struct ti
     return 0;
 }
 
+inline int __cobalt_sem_init([[maybe_unused]] sem_t* sem, [[maybe_unused]] int shared, [[maybe_unused]] int value)
+{
+    assert(false);
+    return 0;
+}
+
+inline int __cobalt_sem_destroy([[maybe_unused]] sem_t* sem)
+{
+    assert(false);
+    return 0;
+}
+
+inline int __cobalt_sem_wait([[maybe_unused]] sem_t* sem)
+{
+    assert(false);
+    return 0;
+}
+
+inline int __cobalt_sem_post([[maybe_unused]] sem_t* sem)
+{
+    assert(false);
+    return 0;
+}
+
+constexpr auto PTHREAD_WARNSW = 0;
+inline void pthread_setmode_np([[maybe_unused]] int clrmask,[[maybe_unused]] int setmask, [[maybe_unused]] int* mode_r)
+{
+    assert(false);
+}
+
+}
 #endif //TWINE_XENOMAI_STUBS_H

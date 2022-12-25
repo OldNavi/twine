@@ -28,7 +28,7 @@
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 // #include <cobalt/pthread.h>
-#include <sys/types.h> 
+#include <sys/types.h>
 #include <unistd.h>
 #pragma GCC diagnostic pop
 #endif
@@ -162,8 +162,6 @@ inline int condition_broadcast(pthread_cond_t* condition_var)
     //     return __cobalt_pthread_cond_broadcast(condition_var);
     // }
 }
-
-
 
 template<ThreadType type>
 inline int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument)

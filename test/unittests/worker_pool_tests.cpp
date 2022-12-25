@@ -4,24 +4,27 @@
 
 #include "gtest/gtest.h"
 
+#define private public
 #include "worker_pool_implementation.h"
 
 using namespace twine;
 
-void test_function(bool& running, bool& flag, BarrierWithTrigger<ThreadType::PTHREAD>(& barrier))
+constexpr int N_TEST_WORKERS = 4;
+
+void test_function(std::atomic_bool& running, std::atomic_bool& flag, BarrierWithTrigger<ThreadType::PTHREAD>(& barrier))
 {
     while (running)
     {
-         barrier.wait();
-         flag = true;
+        barrier.wait();
+        flag = true;
     }
 }
 
 TEST (BarrierTest, TestBarrierWithTrigger)
 {
-    bool a = false;
-    bool b = false;
-    bool running = true;
+    std::atomic_bool a = false;
+    std::atomic_bool b = false;
+    std::atomic_bool running = true;
 
     BarrierWithTrigger<ThreadType::PTHREAD> module_under_test;
     module_under_test.set_no_threads(2);
@@ -34,10 +37,16 @@ TEST (BarrierTest, TestBarrierWithTrigger)
 
     /* Run both threads and wait for them to stop at the barrier again */
     module_under_test.release_all();
-
     module_under_test.wait_for_all();
 
     /* Both flags should now be set to true */
+    ASSERT_TRUE(a);
+    ASSERT_TRUE(b);
+
+    /* Do it again with the single function release and wait */
+    a = false;
+    b = false;
+    module_under_test.release_and_wait();
     ASSERT_TRUE(a);
     ASSERT_TRUE(b);
 
@@ -53,7 +62,8 @@ class PthreadWorkerPoolTest : public ::testing::Test
 protected:
     PthreadWorkerPoolTest() {}
 
-    WorkerPoolImpl<ThreadType::PTHREAD> _module_under_test{2, true};
+    WorkerPoolImpl<ThreadType::PTHREAD> _module_under_test{N_TEST_WORKERS, true, false};
+
     bool a{false};
     bool b{false};
 };
@@ -78,3 +88,117 @@ TEST_F(PthreadWorkerPoolTest, FunctionalityTest)
     ASSERT_TRUE(a);
     ASSERT_TRUE(b);
 }
+
+#ifndef __APPLE__
+TEST_F(PthreadWorkerPoolTest, TestSetPriority)
+{
+    constexpr int TEST_SCHED_PRIO_0 = 66;
+    constexpr int TEST_SCHED_PRIO_1 = 77;
+    auto res = _module_under_test.add_worker(worker_function, nullptr, TEST_SCHED_PRIO_0);
+    ASSERT_EQ(WorkerPoolStatus::OK, res);
+    res = _module_under_test.add_worker(worker_function, nullptr, TEST_SCHED_PRIO_1);
+    ASSERT_EQ(WorkerPoolStatus::OK, res);
+
+    pthread_attr_t task_attributes;
+    struct sched_param rt_params;
+    pthread_t worker_tid = _module_under_test._workers[0]->_thread_handle;
+    auto pres = pthread_getattr_np(worker_tid, &task_attributes);
+    ASSERT_EQ(pres, 0);
+    pres = pthread_attr_getschedparam(&task_attributes, &rt_params);
+    ASSERT_EQ(pres, 0);
+    ASSERT_EQ(rt_params.sched_priority, TEST_SCHED_PRIO_0);
+
+    worker_tid = _module_under_test._workers[1]->_thread_handle;
+    pres = pthread_getattr_np(worker_tid, &task_attributes);
+    ASSERT_EQ(pres, 0);
+    pres = pthread_attr_getschedparam(&task_attributes, &rt_params);
+    ASSERT_EQ(pres, 0);
+    ASSERT_EQ(rt_params.sched_priority, TEST_SCHED_PRIO_1);
+}
+#endif
+
+TEST_F(PthreadWorkerPoolTest, TestWrongPriority)
+{
+    auto res = _module_under_test.add_worker(worker_function, nullptr, -17);
+    ASSERT_EQ(WorkerPoolStatus::INVALID_ARGUMENTS, res);
+    res = _module_under_test.add_worker(worker_function, nullptr, 102);
+    ASSERT_EQ(WorkerPoolStatus::INVALID_ARGUMENTS, res);
+}
+
+#ifndef __APPLE__
+TEST_F(PthreadWorkerPoolTest, TestAutomaticAffinity)
+{
+    for (int i=0; i<N_TEST_WORKERS; i++)
+    {
+        auto res = _module_under_test.add_worker(worker_function, nullptr);
+        ASSERT_EQ(WorkerPoolStatus::OK, res);
+    }
+
+    for (int i=0; i<N_TEST_WORKERS; i++)
+    {
+        pthread_attr_t task_attributes;
+        pthread_t worker_tid = _module_under_test._workers[i]->_thread_handle;
+        auto pres = pthread_getattr_np(worker_tid, &task_attributes);
+        ASSERT_EQ(pres, 0);
+
+        cpu_set_t cpus;
+        pres = pthread_attr_getaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
+        ASSERT_EQ(pres, 0);
+        for (int k=0; k<N_TEST_WORKERS; k++)
+        {
+            if (k == i)
+            {
+                ASSERT_TRUE(CPU_ISSET(k, &cpus));
+            }
+            else
+            {
+                ASSERT_FALSE(CPU_ISSET(k, &cpus));
+            }
+        }
+    }
+
+}
+
+
+TEST_F(PthreadWorkerPoolTest, TestManualAffinity)
+{
+    int TEST_AFFINITIES[N_TEST_WORKERS] = {3, 2, 1, 1};
+    for (int i=0; i<N_TEST_WORKERS; i++)
+    {
+        auto res = _module_under_test.add_worker(worker_function, nullptr, 75, TEST_AFFINITIES[i]);
+        ASSERT_EQ(WorkerPoolStatus::OK, res);
+    }
+
+    for (int i=0; i<N_TEST_WORKERS; i++)
+    {
+        pthread_attr_t task_attributes;
+        pthread_t worker_tid = _module_under_test._workers[i]->_thread_handle;
+        auto pres = pthread_getattr_np(worker_tid, &task_attributes);
+        ASSERT_EQ(pres, 0);
+
+        cpu_set_t cpus;
+        pres = pthread_attr_getaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
+        ASSERT_EQ(pres, 0);
+        int expected_affinity = TEST_AFFINITIES[i];
+        for (int k=0; k<N_TEST_WORKERS; k++)
+        {
+            if (k == expected_affinity)
+            {
+                ASSERT_TRUE(CPU_ISSET(k, &cpus));
+            }
+            else
+            {
+                ASSERT_FALSE(CPU_ISSET(k, &cpus));
+            }
+        }
+    }
+
+}
+#endif
+
+TEST_F(PthreadWorkerPoolTest, TestManualAffinityOutOfRange)
+{
+    auto res = _module_under_test.add_worker(worker_function, nullptr, 75, N_TEST_WORKERS+1);
+    ASSERT_EQ(WorkerPoolStatus::INVALID_ARGUMENTS, res);
+}
+
