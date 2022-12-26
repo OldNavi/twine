@@ -49,17 +49,17 @@ enum class ThreadType : uint32_t
     XENOMAI
 };
 
-template<ThreadType type>
-inline int mutex_create(void* mutex, const void* attributes)
+template<ThreadType type, typename T>
+inline int mutex_create(T* mutex, const void* attributes)
 {
      if constexpr (type == ThreadType::PTHREAD)
      {
-        return pthread_mutex_init((pthread_mutex_t*)mutex, (pthread_mutexattr_t*)attributes);
+        return pthread_mutex_init(mutex, (pthread_mutexattr_t*)attributes);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
      else if constexpr (type == ThreadType::XENOMAI)
      {
-         return evl_create_mutex((struct evl_mutex *)mutex, EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL|EVL_CLONE_PRIVATE, (const char *)attributes);
+         return evl_create_mutex((mutex, EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL|EVL_CLONE_PRIVATE, (const char *)attributes);
      }
 #endif
 }
