@@ -179,7 +179,7 @@ inline int condition_broadcast(void* condition_var)
 #ifdef TWINE_BUILD_WITH_XENOMAI
      else if constexpr (type == ThreadType::XENOMAI)
      {
-         return evl_broadcast((struct evl_event *)condition_var);
+         return evl_broadcast_event((struct evl_event *)condition_var);
      }
 #endif
 }
