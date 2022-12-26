@@ -59,7 +59,7 @@ inline int mutex_create(T* mutex, const void* attributes)
 #ifdef TWINE_BUILD_WITH_XENOMAI
      else if constexpr (type == ThreadType::XENOMAI)
      {
-         return evl_create_mutex((mutex, EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL|EVL_CLONE_PRIVATE, (const char *)attributes);
+         return evl_create_mutex(mutex, EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL|EVL_CLONE_PRIVATE, (const char *)attributes);
      }
 #endif
 }
