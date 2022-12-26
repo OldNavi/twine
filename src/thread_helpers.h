@@ -67,12 +67,12 @@ inline int mutex_create(T* mutex, const void* attributes)
 template<ThreadType type, typename T>
 inline int mutex_destroy(T* mutex)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, pthread_mutex_t> )
      {
         return pthread_mutex_destroy(mutex);
         }
 #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_mutex> )
      {
          return evl_close_mutex(mutex);
      }
@@ -82,12 +82,12 @@ inline int mutex_destroy(T* mutex)
 template<ThreadType type,typename T>
 inline int mutex_lock(T* mutex)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, pthread_mutex_t> )
      {
         return pthread_mutex_lock(mutex);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_mutex>)
      {
          return evl_lock_mutex(mutex);
      }
@@ -97,12 +97,12 @@ inline int mutex_lock(T* mutex)
 template<ThreadType type,typename T>
 inline int mutex_unlock(T* mutex)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, pthread_mutex_t> )
      {
         return pthread_mutex_unlock(mutex);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_mutex>)
      {
          return evl_unlock_mutex(mutex);
      }
