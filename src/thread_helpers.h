@@ -52,12 +52,12 @@ enum class ThreadType : uint32_t
 template<ThreadType type, typename T>
 inline int mutex_create(T* mutex, const void* attributes)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, pthread_mutex_t> )
      {
         return pthread_mutex_init(mutex, (pthread_mutexattr_t*)attributes);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_mutex> )
      {
          return evl_create_mutex(mutex, EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL|EVL_CLONE_PRIVATE, (const char *)attributes);
      }
