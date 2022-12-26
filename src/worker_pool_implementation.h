@@ -127,299 +127,6 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
     }
 }
 
-// /**
-//  * @brief Thread barrier that can be controlled from an external thread
-//  */
-// template <ThreadType type>
-// class BarrierWithTrigger
-// {
-// public:
-//     TWINE_DECLARE_NON_COPYABLE(BarrierWithTrigger);
-//     /**
-//      * @brief Multithread barrier with trigger functionality
-//      */
-//     BarrierWithTrigger()
-//     {
-//         if constexpr (type == ThreadType::XENOMAI)
-//         {
-//             _evl_semaphores[0] = &_evl_semaphore_store[0];
-//             _evl_semaphores[1] = &_evl_semaphore_store[1];
-//             _evl_calling_mutex = EVL_MUTEX_INITIALIZER("mtx_calling", EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL | EVL_CLONE_PUBLIC);
-//             _evl_calling_cond = EVL_EVENT_INITIALIZER("evt_calling",  EVL_CLOCK_MONOTONIC, EVL_CLONE_PUBLIC);
-//             int fd =   evl_create_sem(_evl_semaphores[0], EVL_CLOCK_MONOTONIC, 0, EVL_CLONE_PUBLIC, "twine_semaphore_0");
-//             if(fd<0){
-//                 std::cerr << "Cannot create semafore with error " << fd << std::endl;
-//             }
-//             fd = evl_create_sem(_evl_semaphores[1], EVL_CLOCK_MONOTONIC, 0, EVL_CLONE_PUBLIC, "twine_semaphore_1");
-//             if(fd<0){
-//                 std::cerr << "Cannot create semafore with error " << fd <<  std::endl;
-//             }
-//             _evl_active_sem = _evl_semaphores[0];
-//         } else
-//         {
-//         mutex_create<type>(&_calling_mutex, nullptr);
-//         condition_var_create<type>(&_calling_cond, nullptr);
-//         int res = semaphore_create<type>(&_semaphores[0], "twine_semaphore_0");
-//         if (res != 0)
-//         {
-//             throw std::runtime_error(strerror(res));
-//         }
-//         res = semaphore_create<type>(&_semaphores[1], "twine_semaphore_1");
-//         if (res != 0)
-//         {
-//             throw std::runtime_error(strerror(res));
-//         }
-//         _active_sem = _semaphores[0];
-//         }
-//     }
-
-//     /**
-//      * @brief Destroy the barrier object
-//      */
-//     ~BarrierWithTrigger()
-//     {
-//         if constexpr (type == ThreadType::XENOMAI)
-//         {
-//             evl_close_mutex(&_evl_calling_mutex);
-//             evl_close_event(&_evl_calling_cond);
-//             evl_close_sem(_evl_semaphores[0]);
-//             evl_close_sem(_evl_semaphores[1]);
-//         }
-//         else {
-//         mutex_destroy<type>(&_calling_mutex);
-//         condition_var_destroy<type>(&_calling_cond);
-//         semaphore_destroy<type>(_semaphores[0], "twine_semaphore_0");
-//         semaphore_destroy<type>(_semaphores[1], "twine_semaphore_1");
-//         }
-//     }
-
-//     /**
-//      * @brief Wait for signal to finish, called from threads participating on the
-//      *        barrier
-//      */
-//     void wait()
-//     {
-//         if constexpr (type == ThreadType::XENOMAI)
-//         {
-//         evl_lock_mutex(&_evl_calling_mutex);
-//         auto active_sem = _evl_active_sem;
-//         if (++_no_threads_currently_on_barrier >= _no_threads)
-//         {
-//             evl_signal_event(&_evl_calling_cond);
-//         }
-//         evl_unlock_mutex(&_evl_calling_mutex);
-//         evl_get_sem(active_sem);
-//         }
-//         else {
-//         mutex_lock<type>(&_calling_mutex);
-//         auto active_sem = _active_sem;
-//         if (++_no_threads_currently_on_barrier >= _no_threads)
-//         {
-//             condition_signal<type>(&_calling_cond);
-//         }
-//         mutex_unlock<type>(&_calling_mutex);
-
-//         semaphore_wait<type>(active_sem);
-//         }
-//     }
-
-//     /**
-//      * @brief Wait for all threads to halt on the barrier, called from a thread
-//      *        not waiting on the barrier and will block until all threads are
-//      *        waiting on the barrier.
-//      */
-//     void wait_for_all()
-//     {
-//         if constexpr (type == ThreadType::XENOMAI)
-//         {
-//             evl_lock_mutex(&_evl_calling_mutex);
-//         int current_threads = _no_threads_currently_on_barrier;
-
-//         if (current_threads == _no_threads)
-//         {
-//             evl_unlock_mutex(&_evl_calling_mutex);
-//             return;
-//         }
-//         while (current_threads < _no_threads)
-//         {
-//             evl_wait_event(&_evl_calling_cond, &_evl_calling_mutex);
-//             current_threads = _no_threads_currently_on_barrier;
-//         }
-//         evl_unlock_mutex(&_evl_calling_mutex);
-//         }
-//         else {
-//         mutex_lock<type>(&_calling_mutex);
-//         int current_threads = _no_threads_currently_on_barrier;
-
-//         if (current_threads == _no_threads)
-//         {
-//             mutex_unlock<type>(&_calling_mutex);
-//             return;
-//         }
-//         while (current_threads < _no_threads)
-//         {
-//             condition_wait<type>(&_calling_cond, &_calling_mutex);
-//             current_threads = _no_threads_currently_on_barrier;
-//         }
-//         mutex_unlock<type>(&_calling_mutex);
-//         }
-//     }
-
-//     /**
-//      * @brief Change the number of threads for the barrier to handle.
-//      * @param threads
-//      */
-//     void set_no_threads(int threads)
-//     {
-//         if constexpr (type == ThreadType::XENOMAI)
-//         {
-//          evl_lock_mutex(&_evl_calling_mutex);
-//         _no_threads = threads;
-//         evl_unlock_mutex(&_evl_calling_mutex);
-//         }
-//         else {
-//         mutex_lock<type>(&_calling_mutex);
-//         _no_threads = threads;
-//         mutex_unlock<type>(&_calling_mutex);
-//         }
-//     }
-
-//     /**
-//      * @brief Release all threads waiting on the barrier.
-//      */
-//     void release_all()
-//     {
-//         if constexpr (type == ThreadType::XENOMAI)
-//         {
-//         evl_lock_mutex(&_evl_calling_mutex);
-
-//         assert(_no_threads_currently_on_barrier == _no_threads);
-//         _no_threads_currently_on_barrier = 0;
-
-//         auto prev_sem = _evl_active_sem;
-//         _swap_semaphores();
-
-//         for (int i = 0; i < _no_threads; ++i)
-//         {
-//             evl_put_sem(prev_sem);
-//         }
-
-//         evl_unlock_mutex(&_evl_calling_mutex);
-//         }
-//         else {
-//         mutex_lock<type>(&_calling_mutex);
-
-//         assert(_no_threads_currently_on_barrier == _no_threads);
-//         _no_threads_currently_on_barrier = 0;
-
-//         auto prev_sem = _active_sem;
-//         _swap_semaphores();
-
-//         for (int i = 0; i < _no_threads; ++i)
-//         {
-//             semaphore_signal<type>(prev_sem);
-//         }
-
-//         mutex_unlock<type>(&_calling_mutex);
-//         }
-//     }
-
-//     void release_and_wait()
-//     {
-//         if constexpr (type == ThreadType::XENOMAI)
-//         {
-//         evl_lock_mutex(&_evl_calling_mutex);
-//         assert(_no_threads_currently_on_barrier == _no_threads);
-//         _no_threads_currently_on_barrier = 0;
-
-//         auto prev_sem = _evl_active_sem;
-//         _swap_semaphores();
-
-//         for (int i = 0; i < _no_threads; ++i)
-//         {
-//              evl_put_sem(prev_sem);
-//         }
-
-//         int current_threads = _no_threads_currently_on_barrier;
-
-//         while (current_threads < _no_threads)
-//         {
-//             evl_wait_event(&_evl_calling_cond, &_evl_calling_mutex);
-//             current_threads = _no_threads_currently_on_barrier;
-//         }
-//          evl_unlock_mutex(&_evl_calling_mutex);
-//         }
-//         else {
-//         mutex_lock<type>(&_calling_mutex);
-//         assert(_no_threads_currently_on_barrier == _no_threads);
-//         _no_threads_currently_on_barrier = 0;
-
-//         auto prev_sem = _active_sem;
-//         _swap_semaphores();
-
-//         for (int i = 0; i < _no_threads; ++i)
-//         {
-//             semaphore_signal<type>(prev_sem);
-//         }
-
-//         int current_threads = _no_threads_currently_on_barrier;
-
-//         while (current_threads < _no_threads)
-//         {
-//             condition_wait<type>(&_calling_cond, &_calling_mutex);
-//             current_threads = _no_threads_currently_on_barrier;
-//         }
-//         mutex_unlock<type>(&_calling_mutex);
-//         }
-//     }
-
-// private:
-//     void _swap_semaphores()
-//     {
-//         if constexpr (type == ThreadType::XENOMAI)
-//         {
-//         if (_evl_active_sem == _evl_semaphores[0])
-//         {
-//             _evl_active_sem = _evl_semaphores[1];
-//         }
-//         else
-//         {
-//             _evl_active_sem = _evl_semaphores[0];
-//         }
-//         }
-//         else
-//         {
-//         if (_active_sem == _semaphores[0])
-//         {
-//             _active_sem = _semaphores[1];
-//         }
-//         else
-//         {
-//             _active_sem = _semaphores[0];
-//         }
-//         }
-//     }
-
-//     std::array<sem_t, 2 > _semaphore_store;
-//     std::array<sem_t*, 2> _semaphores;
-//     sem_t* _active_sem;
-
-//     pthread_mutex_t _calling_mutex;
-//     pthread_cond_t  _calling_cond;
-// #ifdef TWINE_BUILD_WITH_XENOMAI
-//     std::array<struct evl_sem, 2 > _evl_semaphore_store;
-//     std::array<struct evl_sem*, 2> _evl_semaphores;
-//     struct evl_sem* _evl_active_sem;
-
-//     struct evl_mutex _evl_calling_mutex;
-//     struct evl_event _evl_calling_cond;
-// #endif
-
-//     std::atomic<int> _no_threads_currently_on_barrier{0};
-//     std::atomic<int> _no_threads{0};
-// };
-
-
 /**
  * @brief Thread barrier that can be controlled from an external thread
  */
@@ -435,18 +142,25 @@ public:
     {
         if constexpr (type == ThreadType::XENOMAI)
         {
-
-            _evl_calling_mutex = EVL_MUTEX_INITIALIZER("mtx_calling", EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL | EVL_CLONE_PUBLIC);
-            _evl_thread_mutex = EVL_MUTEX_INITIALIZER("mtx_thread", EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL | EVL_CLONE_PUBLIC);
-            _evl_calling_cond = EVL_EVENT_INITIALIZER("evt_calling",  EVL_CLOCK_MONOTONIC, EVL_CLONE_PUBLIC);
-            _evl_thread_cond = EVL_EVENT_INITIALIZER("evt_thread",  EVL_CLOCK_MONOTONIC, EVL_CLONE_PUBLIC);
-
+            _semaphores[0] = &_semaphore_store[0];
+            _semaphores[1] = &_semaphore_store[1];
+            mutex_create<type>(&_calling_mutex, "mtx_calling");
+            condition_var_create<type>(&_calling_cond, "evt_calling");
         } else {
-        mutex_create<type>(&_thread_mutex, nullptr);
         mutex_create<type>(&_calling_mutex, nullptr);
-        condition_var_create<type>(&_thread_cond, nullptr);
         condition_var_create<type>(&_calling_cond, nullptr);
         }
+        int res = semaphore_create<type>(&_semaphores[0], "twine_semaphore_0");
+        if (res != 0)
+        {
+            throw std::runtime_error(strerror(res));
+        }
+        res = semaphore_create<type>(&_semaphores[1], "twine_semaphore_1");
+        if (res != 0)
+        {
+            throw std::runtime_error(strerror(res));
+        }
+        _active_sem = _semaphores[0];
     }
 
     /**
@@ -454,20 +168,10 @@ public:
      */
     ~BarrierWithTrigger()
     {
-        if constexpr (type == ThreadType::XENOMAI)
-        {
-            evl_close_mutex(&_evl_calling_mutex);
-            evl_close_event(&_evl_calling_cond);
-            evl_close_mutex(&_evl_thread_mutex);
-            evl_close_event(&_evl_thread_cond);
-
-        }
-        else {
-        mutex_destroy<type>(&_thread_mutex);
         mutex_destroy<type>(&_calling_mutex);
-        condition_var_destroy<type>(&_thread_cond);
         condition_var_destroy<type>(&_calling_cond);
-        }
+        semaphore_destroy<type>(_semaphores[0], "twine_semaphore_0");
+        semaphore_destroy<type>(_semaphores[1], "twine_semaphore_1");
     }
 
     /**
@@ -476,41 +180,15 @@ public:
      */
     void wait()
     {
-        const bool& halt_flag = *_halt_flag; // 'local' halt flag for this round
-        if constexpr (type == ThreadType::XENOMAI)
-        {
-        evl_lock_mutex(&_evl_calling_mutex);
-        if (++_no_threads_currently_on_barrier >= _no_threads)
-        {
-            evl_signal_event(&_evl_calling_cond);
-        }
-        evl_unlock_mutex(&_evl_calling_mutex);
-
-        evl_lock_mutex(&_evl_thread_mutex);
-        while (halt_flag)
-        {
-            // The condition needs to be rechecked when waking as threads may wake up spuriously
-            evl_wait_event(&_evl_thread_cond, &_evl_thread_mutex);
-        }
-        evl_unlock_mutex(&_evl_thread_mutex);
-        }
-        else
-        {
         mutex_lock<type>(&_calling_mutex);
+        auto active_sem = _active_sem;
         if (++_no_threads_currently_on_barrier >= _no_threads)
         {
             condition_signal<type>(&_calling_cond);
         }
         mutex_unlock<type>(&_calling_mutex);
 
-        mutex_lock<type>(&_thread_mutex);
-        while (halt_flag)
-        {
-            // The condition needs to be rechecked when waking as threads may wake up spuriously
-            condition_wait<type>(&_thread_cond, &_thread_mutex);
-        }
-        mutex_unlock<type>(&_thread_mutex);
-        }
+        semaphore_wait<type>(active_sem);
     }
 
     /**
@@ -520,25 +198,9 @@ public:
      */
     void wait_for_all()
     {
-        if constexpr (type == ThreadType::XENOMAI)
-        {
-        evl_lock_mutex(&_evl_calling_mutex);
-        int current_threads = _no_threads_currently_on_barrier;
-        if (current_threads == _no_threads)
-        {
-            evl_unlock_mutex(&_evl_calling_mutex);
-            return;
-        }
-        while (current_threads < _no_threads)
-        {
-            evl_wait_event(&_evl_calling_cond, &_evl_calling_mutex);
-            current_threads = _no_threads_currently_on_barrier;
-        }
-        evl_unlock_mutex(&_evl_calling_mutex);
-        }
-        else {
         mutex_lock<type>(&_calling_mutex);
         int current_threads = _no_threads_currently_on_barrier;
+
         if (current_threads == _no_threads)
         {
             mutex_unlock<type>(&_calling_mutex);
@@ -550,7 +212,6 @@ public:
             current_threads = _no_threads_currently_on_barrier;
         }
         mutex_unlock<type>(&_calling_mutex);
-        }
     }
 
     /**
@@ -559,18 +220,9 @@ public:
      */
     void set_no_threads(int threads)
     {
-        if constexpr (type == ThreadType::XENOMAI)
-        {
-        evl_lock_mutex(&_evl_calling_mutex);
-        _no_threads = threads;
-        evl_unlock_mutex(&_evl_calling_mutex);
-
-        }
-        else {
         mutex_lock<type>(&_calling_mutex);
         _no_threads = threads;
         mutex_unlock<type>(&_calling_mutex);
-        }
     }
 
     /**
@@ -578,71 +230,75 @@ public:
      */
     void release_all()
     {
-        if constexpr (type == ThreadType::XENOMAI)
-        {
-        evl_lock_mutex(&_evl_calling_mutex);
-        assert(_no_threads_currently_on_barrier == _no_threads);
-        _swap_halt_flags();
-        _no_threads_currently_on_barrier = 0;
-        /* For xenomai threads, it is neccesary to hold the mutex while
-         * sending the broadcast. Otherwise deadlocks can occur. For
-         * pthreads it is not neccesary but it is recommended for
-         * good realtime performance. And surprisingly enough seems
-         * a bit faster that without holding the mutex.  */
-        evl_lock_mutex(&_evl_thread_mutex);
-        evl_broadcast_event(&_evl_thread_cond);
-        evl_unlock_mutex(&_evl_thread_mutex);
-        evl_unlock_mutex(&_evl_calling_mutex);
-        }
-        else {
         mutex_lock<type>(&_calling_mutex);
+
         assert(_no_threads_currently_on_barrier == _no_threads);
-        _swap_halt_flags();
         _no_threads_currently_on_barrier = 0;
-        /* For xenomai threads, it is neccesary to hold the mutex while
-         * sending the broadcast. Otherwise deadlocks can occur. For
-         * pthreads it is not neccesary but it is recommended for
-         * good realtime performance. And surprisingly enough seems
-         * a bit faster that without holding the mutex.  */
-        mutex_lock<type>(&_thread_mutex);
-        condition_broadcast<type>(&_thread_cond);
-        mutex_unlock<type>(&_thread_mutex);
-        mutex_unlock<type>(&_calling_mutex);
+
+        auto prev_sem = _active_sem;
+        _swap_semaphores();
+
+        for (int i = 0; i < _no_threads; ++i)
+        {
+            semaphore_signal<type>(prev_sem);
         }
+
+        mutex_unlock<type>(&_calling_mutex);
     }
 
+    void release_and_wait()
+    {
+        mutex_lock<type>(&_calling_mutex);
+        assert(_no_threads_currently_on_barrier == _no_threads);
+        _no_threads_currently_on_barrier = 0;
+
+        auto prev_sem = _active_sem;
+        _swap_semaphores();
+
+        for (int i = 0; i < _no_threads; ++i)
+        {
+            semaphore_signal<type>(prev_sem);
+        }
+
+        int current_threads = _no_threads_currently_on_barrier;
+
+        while (current_threads < _no_threads)
+        {
+            condition_wait<type>(&_calling_cond, &_calling_mutex);
+            current_threads = _no_threads_currently_on_barrier;
+        }
+        mutex_unlock<type>(&_calling_mutex);
+    }
 
 private:
-    void _swap_halt_flags()
+    void _swap_semaphores()
     {
-        *_halt_flag = false;
-        if (_halt_flag == &_halt_flags[0])
+        if (_active_sem == _semaphores[0])
         {
-            _halt_flag = &_halt_flag[1];
+            _active_sem = _semaphores[1];
         }
         else
         {
-            _halt_flag = &_halt_flags[0];
+            _active_sem = _semaphores[0];
         }
-        *_halt_flag = true;
     }
-
-    pthread_mutex_t _thread_mutex;
-    pthread_mutex_t _calling_mutex;
-
-    pthread_cond_t _thread_cond;
-    pthread_cond_t _calling_cond;
 #ifdef TWINE_BUILD_WITH_XENOMAI
-    struct evl_mutex _evl_calling_mutex;
-    struct evl_event _evl_calling_cond;
-    struct evl_mutex _evl_thread_mutex;
-    struct evl_event _evl_thread_cond;
-#endif
+    std::array<struct evl_sem, 2 > _semaphore_store;
+    std::array<struct evl_sem*, 2> _semaphores;
+    struct evl_sem* _active_sem;
 
-    std::array<bool, 2> _halt_flags{true, true};
-    bool*_halt_flag{&_halt_flags[0]};
-    int _no_threads_currently_on_barrier{0};
-    int _no_threads{0};
+    struct evl_mutex _calling_mutex;
+    struct evl_event  _calling_cond;
+#else
+    std::array<sem_t, 2 > _semaphore_store;
+    std::array<sem_t*, 2> _semaphores;
+    sem_t* _active_sem;
+
+    pthread_mutex_t _calling_mutex;
+    pthread_cond_t  _calling_cond;
+#endif
+    std::atomic<int> _no_threads_currently_on_barrier{0};
+    std::atomic<int> _no_threads{0};
 };
 
 template <ThreadType type>
@@ -667,12 +323,7 @@ public:
     {
         if (_thread_handle != 0)
         {
-#ifdef TWINE_BUILD_WITH_XENOMAI
-        evl_detach_self();
-#endif
-            pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,nullptr);
-            pthread_cancel(_thread_handle);
-            // thread_join<type>(_thread_handle, nullptr);
+            thread_join<type>(_thread_handle, nullptr);
         }
     }
 
@@ -760,7 +411,8 @@ public:
     explicit WorkerPoolImpl(int cores,
                             bool disable_denormals) : _no_cores(cores),
                                                      _cores_usage(cores, 0),
-                                                     _disable_denormals(disable_denormals)
+                                                     _disable_denormals(disable_denormals),
+                                                     _break_on_mode_sw(break_on_mode_sw)
 
     {
     #ifdef TWINE_BUILD_WITH_XENOMAI
@@ -797,7 +449,8 @@ public:
 
     WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data,
                                 int sched_priority=75,
-                                std::optional<int> cpu_id=std::nullopt) override    {
+                                std::optional<int> cpu_id=std::nullopt) override
+    {
         int core = 0;
         if (cpu_id.has_value())
         {
@@ -807,6 +460,7 @@ public:
                 return WorkerPoolStatus::INVALID_ARGUMENTS;
             }
         }
+        else
         {
             // If no core is specified, pick the first core with least usage
             int min_idx = _no_cores - 1;
@@ -823,15 +477,17 @@ public:
             core = min_idx;
         }
         // round-robin assignment to cpu cores
-        _cores_usage[core]++;
 #ifdef TWINE_BUILD_WITH_XENOMAI
         core = core_numbers[core];
         //std::cerr << "Core assigned = " << core << std::endl;
 #endif
 
         auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running,
-                                                           _disable_denormals);
+                                                           _disable_denormals, _break_on_mode_sw);
         _barrier.set_no_threads(_no_workers + 1);
+
+        _cores_usage[core]++;
+
         auto res = errno_to_worker_status(worker->run(sched_priority, core));
         if (res == WorkerPoolStatus::OK)
         {
@@ -857,7 +513,10 @@ public:
         _barrier.release_all();
     }
 
-
+    void wakeup_and_wait() override
+    {
+        _barrier.release_and_wait();
+    }
 
 private:
     std::atomic_bool            _running{true};
