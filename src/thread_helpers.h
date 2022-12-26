@@ -126,6 +126,7 @@ inline int condition_var_create(T* condition_var, const void* attributes)
          return evl_new_event(condition_var,(const char *)attributes);
      }
 #endif
+return 0;
 }
 
 template<ThreadType type,typename T>
@@ -141,9 +142,10 @@ inline int condition_var_destroy(T* condition_var)
          return evl_close_event(condition_var);
      }
 #endif
+return 0;
 }
 
-template<ThreadType type, typename T, M>
+template<ThreadType type, typename T, typename M>
 inline int condition_wait(T* condition_var, M* mutex)
 {
      if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, pthread_cond_t> && std::is_same_v<M, pthread_mutex_t>)
@@ -156,6 +158,7 @@ inline int condition_wait(T* condition_var, M* mutex)
          return evl_wait_event(condition_var,mutex);
      }
 #endif
+return 0;
 }
 
 template<ThreadType type,  typename T>
@@ -171,6 +174,7 @@ inline int condition_signal(T* condition_var)
          return evl_signal_event(condition_var);
      }
 #endif
+return 0;
 }
 
 template<ThreadType type,typename T>
@@ -186,6 +190,7 @@ inline int condition_broadcast(T* condition_var)
          return evl_broadcast_event(condition_var);
      }
 #endif
+return 0;
 }
 
 template<ThreadType type>
@@ -216,6 +221,7 @@ inline int thread_join(pthread_t thread, void** return_var = nullptr)
         return pthread_cancel(thread);
     }
 #endif
+return 0;
 }
 
 template<ThreadType type,typename T>
@@ -237,6 +243,7 @@ inline int semaphore_create(T** semaphore, [[maybe_unused]] const char* semaphor
      	return evl_create_sem(*semaphore, EVL_CLOCK_MONOTONIC, 0, EVL_CLONE_PRIVATE,semaphore_name);
      }
  #endif
+return 0;
 }
 
 template<ThreadType type,typename T>
@@ -254,6 +261,7 @@ inline int semaphore_destroy(T* semaphore, [[maybe_unused]] const char* semaphor
          return evl_close_sem(semaphore);
      }
  #endif
+return 0;
 }
 
 template<ThreadType type,typename T>
@@ -269,6 +277,7 @@ inline int semaphore_wait(T* semaphore)
          return evl_get_sem(semaphore);
      }
  #endif
+return 0;
 }
 
 template<ThreadType type,typename T>
@@ -285,6 +294,7 @@ inline int semaphore_signal(T* semaphore)
      }
  #endif
 }
+return 0;
 } // namespace twine
 
 #endif //TWINE_THREAD_HELPERS_H
