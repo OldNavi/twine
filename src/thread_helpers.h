@@ -64,47 +64,47 @@ inline int mutex_create(T* mutex, const void* attributes)
 #endif
 }
 
-template<ThreadType type>
-inline int mutex_destroy(void* mutex)
+template<ThreadType type, typename T>
+inline int mutex_destroy(T* mutex)
 {
      if constexpr (type == ThreadType::PTHREAD)
      {
-        return pthread_mutex_destroy((pthread_mutex_t*)mutex);
+        return pthread_mutex_destroy(mutex);
         }
 #ifdef TWINE_BUILD_WITH_XENOMAI
      else if constexpr (type == ThreadType::XENOMAI)
      {
-         return evl_close_mutex((struct evl_mutex *)mutex);
+         return evl_close_mutex(mutex);
      }
 #endif
 }
 
-template<ThreadType type>
-inline int mutex_lock(void* mutex)
+template<ThreadType type,typename T>
+inline int mutex_lock(T* mutex)
 {
      if constexpr (type == ThreadType::PTHREAD)
      {
-        return pthread_mutex_lock((pthread_mutex_t*)mutex);
+        return pthread_mutex_lock(mutex);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
      else if constexpr (type == ThreadType::XENOMAI)
      {
-         return evl_lock_mutex((struct evl_mutex *)mutex);
+         return evl_lock_mutex(mutex);
      }
 #endif
 }
 
-template<ThreadType type>
-inline int mutex_unlock(void* mutex)
+template<ThreadType type,typename T>
+inline int mutex_unlock(T* mutex)
 {
      if constexpr (type == ThreadType::PTHREAD)
      {
-        return pthread_mutex_unlock((pthread_mutex_t*)mutex);
+        return pthread_mutex_unlock(mutex);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
      else if constexpr (type == ThreadType::XENOMAI)
      {
-         return evl_unlock_mutex((struct evl_mutex *)mutex);
+         return evl_unlock_mutex(mutex);
      }
 #endif
 }
