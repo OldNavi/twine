@@ -62,6 +62,7 @@ inline int mutex_create(T* mutex, const void* attributes)
          return evl_create_mutex(mutex, EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL|EVL_CLONE_PRIVATE, (const char *)attributes);
      }
 #endif
+return 0;
 }
 
 template<ThreadType type, typename T>
@@ -77,6 +78,7 @@ inline int mutex_destroy(T* mutex)
          return evl_close_mutex(mutex);
      }
 #endif
+return 0;
 }
 
 template<ThreadType type,typename T>
@@ -92,6 +94,7 @@ inline int mutex_lock(T* mutex)
          return evl_lock_mutex(mutex);
      }
 #endif
+return 0;
 }
 
 template<ThreadType type,typename T>
@@ -107,79 +110,80 @@ inline int mutex_unlock(T* mutex)
          return evl_unlock_mutex(mutex);
      }
 #endif
+return 0;
 }
 
-template<ThreadType type>
-inline int condition_var_create(void* condition_var, const void* attributes)
+template<ThreadType type,typename T>
+inline int condition_var_create(T* condition_var, const void* attributes)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, pthread_cond_t> )
      {
-        return pthread_cond_init((pthread_cond_t*)condition_var, (const pthread_condattr_t*)attributes);
+        return pthread_cond_init(condition_var, (const pthread_condattr_t*)attributes);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_event>)
      {
-         return evl_new_event((struct evl_event *)condition_var,(const char *)attributes);
+         return evl_new_event(condition_var,(const char *)attributes);
      }
 #endif
 }
 
-template<ThreadType type>
-inline int condition_var_destroy(void* condition_var)
+template<ThreadType type,typename T>
+inline int condition_var_destroy(T* condition_var)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, pthread_cond_t>)
      {
-        return pthread_cond_destroy((pthread_cond_t *)condition_var);
+        return pthread_cond_destroy(condition_var);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_event>)
      {
-         return evl_close_event((struct evl_event *)condition_var);
+         return evl_close_event(condition_var);
      }
 #endif
 }
 
-template<ThreadType type>
-inline int condition_wait(void* condition_var, void* mutex)
+template<ThreadType type, typename T, M>
+inline int condition_wait(T* condition_var, M* mutex)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, pthread_cond_t> && std::is_same_v<M, pthread_mutex_t>)
      {
-        return pthread_cond_wait((pthread_cond_t *)condition_var, (pthread_mutex_t *)mutex);
+        return pthread_cond_wait(condition_var, mutex);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_event> && std::is_same_v<M, struct evl_mutex> )
      {
-         return evl_wait_event((struct evl_event *)condition_var,(struct evl_mutex *)mutex);
+         return evl_wait_event(condition_var,mutex);
      }
 #endif
 }
 
-template<ThreadType type>
-inline int condition_signal(void* condition_var)
+template<ThreadType type,  typename T>
+inline int condition_signal(T* condition_var)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, pthread_cond_t> )
      {
-        return pthread_cond_signal((pthread_cond_t*)condition_var);
+        return pthread_cond_signal(condition_var);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_event> )
      {
-         return evl_signal_event((struct evl_event *)condition_var);
+         return evl_signal_event(condition_var);
      }
 #endif
 }
 
-template<ThreadType type>
-inline int condition_broadcast(void* condition_var)
+template<ThreadType type,typename T>
+inline int condition_broadcast(T* condition_var)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, pthread_cond_t>)
      {
-        return pthread_cond_broadcast((pthread_cond_t*)condition_var);
+        return pthread_cond_broadcast(condition_var);
      }
 #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_event>)
      {
-         return evl_broadcast_event((struct evl_event *)condition_var);
+         return evl_broadcast_event(condition_var);
      }
 #endif
 }
@@ -214,10 +218,10 @@ inline int thread_join(pthread_t thread, void** return_var = nullptr)
 #endif
 }
 
-template<ThreadType type>
-inline int semaphore_create(void** semaphore, [[maybe_unused]] const char* semaphore_name)
+template<ThreadType type,typename T>
+inline int semaphore_create(T** semaphore, [[maybe_unused]] const char* semaphore_name)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, sem_t>)
      {
         sem_unlink(semaphore_name);
         *semaphore = sem_open(semaphore_name, O_CREAT, 0, 0);
@@ -228,56 +232,56 @@ inline int semaphore_create(void** semaphore, [[maybe_unused]] const char* semap
         return 0;
      }
   #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI  && std::is_same_v<T, struct evl_sem>)
      {
      	return evl_create_sem(*semaphore, EVL_CLOCK_MONOTONIC, 0, EVL_CLONE_PRIVATE,semaphore_name);
      }
  #endif
 }
 
-template<ThreadType type>
-inline int semaphore_destroy(void* semaphore, [[maybe_unused]] const char* semaphore_name)
+template<ThreadType type,typename T>
+inline int semaphore_destroy(T* semaphore, [[maybe_unused]] const char* semaphore_name)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, sem_t>)
      {
         sem_unlink(semaphore_name);
-        sem_close((sem_t*)semaphore);
+        sem_close(semaphore);
         return 0;
      }
  #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_sem>)
      {
-         return evl_close_sem((struct evl_sem*)semaphore);
+         return evl_close_sem(semaphore);
      }
  #endif
 }
 
-template<ThreadType type>
-inline int semaphore_wait(void* semaphore)
+template<ThreadType type,typename T>
+inline int semaphore_wait(T* semaphore)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD  && std::is_same_v<T, sem_t>)
      {
-        return sem_wait((sem_t*)semaphore);
+        return sem_wait(semaphore);
      }
  #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI  && std::is_same_v<T, struct evl_sem>)
      {
-         return evl_get_sem((struct evl_sem*)semaphore);
+         return evl_get_sem(semaphore);
      }
  #endif
 }
 
-template<ThreadType type>
-inline int semaphore_signal(void* semaphore)
+template<ThreadType type,typename T>
+inline int semaphore_signal(T* semaphore)
 {
-     if constexpr (type == ThreadType::PTHREAD)
+     if constexpr (type == ThreadType::PTHREAD && std::is_same_v<T, sem_t>)
      {
-        return sem_post((sem_t*)semaphore);
+        return sem_post(semaphore);
      }
  #ifdef TWINE_BUILD_WITH_XENOMAI
-     else if constexpr (type == ThreadType::XENOMAI)
+     else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_sem>)
      {
-         return evl_put_sem((struct evl_sem*)semaphore);
+         return evl_put_sem(semaphore);
      }
  #endif
 }
