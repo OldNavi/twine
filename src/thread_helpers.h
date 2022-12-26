@@ -209,7 +209,7 @@ inline int thread_join(pthread_t thread, void** return_var = nullptr)
      {
         evl_detach_self();
         pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,nullptr);
-        return pthread_cancel(_thread_handle);
+        return pthread_cancel(thread);
     }
 #endif
 }
