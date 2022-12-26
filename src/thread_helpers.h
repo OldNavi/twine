@@ -293,8 +293,8 @@ inline int semaphore_signal(T* semaphore)
          return evl_put_sem(semaphore);
      }
  #endif
-}
 return 0;
+}
 } // namespace twine
 
 #endif //TWINE_THREAD_HELPERS_H
