@@ -46,7 +46,7 @@ namespace twine {
 void set_flush_denormals_to_zero();
 inline void enable_break_on_mode_sw()
 {
-    pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+    // pthread_setmode_np(0, PTHREAD_WARNSW, 0);
 }
 #ifdef TWINE_BUILD_WITH_XENOMAI
 int ConvertString2Int(const std::string& str)
@@ -409,7 +409,8 @@ public:
     TWINE_DECLARE_NON_COPYABLE(WorkerPoolImpl);
 
     explicit WorkerPoolImpl(int cores,
-                            bool disable_denormals) : _no_cores(cores),
+                            bool disable_denormals,
+                            bool break_on_mode_sw) : _no_cores(cores),
                                                      _cores_usage(cores, 0),
                                                      _disable_denormals(disable_denormals),
                                                      _break_on_mode_sw(break_on_mode_sw)
