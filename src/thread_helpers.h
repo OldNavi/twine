@@ -59,8 +59,12 @@ inline int mutex_create(T* mutex, const void* attributes)
 #ifdef TWINE_BUILD_WITH_XENOMAI
      else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_mutex> )
      {
-         return evl_create_mutex(mutex, EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL|EVL_CLONE_PRIVATE, (const char *)attributes);
-     }
+         int res = evl_create_mutex(mutex, EVL_CLOCK_MONOTONIC, 0, EVL_MUTEX_NORMAL|EVL_CLONE_PRIVATE, (const char *)attributes);
+         if(res < 0) 
+         {
+           return res;
+         } 
+    }
 #endif
 return 0;
 }
@@ -123,7 +127,11 @@ inline int condition_var_create(T* condition_var, const void* attributes)
 #ifdef TWINE_BUILD_WITH_XENOMAI
      else if constexpr (type == ThreadType::XENOMAI && std::is_same_v<T, struct evl_event>)
      {
-         return evl_new_event(condition_var,(const char *)attributes);
+         int res =  evl_new_event(condition_var,(const char *)attributes);
+         if(res < 0)  
+         { 
+           return res;
+         } 
      }
 #endif
 return 0;
@@ -240,7 +248,11 @@ inline int semaphore_create(T** semaphore, [[maybe_unused]] const char* semaphor
   #ifdef TWINE_BUILD_WITH_XENOMAI
      else if constexpr (type == ThreadType::XENOMAI  && std::is_same_v<T, struct evl_sem>)
      {
-     	return evl_create_sem(*semaphore, EVL_CLOCK_MONOTONIC, 0, EVL_CLONE_PRIVATE,semaphore_name);
+     	int res =  evl_create_sem(*semaphore, EVL_CLOCK_MONOTONIC, 0, EVL_CLONE_PRIVATE,semaphore_name);
+         if(res < 0)  
+         { 
+           return res;
+         } 
      }
  #endif
 return 0;
